@@ -1,0 +1,153 @@
+#! /usr/bin/env bash
+
+exec 4>/dev/null;
+
+_rootPath=$(pwd);
+_scriptName=$(basename $0);
+_scriptDir=$(dirname $0);
+_shouldBeExecuted=$([ "${BASH_SOURCE[0]}" = "${0}" ] && echo "true" || echo "false");
+
+_shell=${SHELL};
+_configPath=${ENVIRONMENT_CONFIG_PATH:-${HOME}/.config/environment};
+_projectName=${ENVIRONMENT_PROJECT_NAME:-$(basename ${_rootPath})};
+_currentEnvironmentName=${CURRENT_ENVIRONMENT_NAME:-};
+
+_force="false";
+
+_ensureCurrentEnvironmentNameIsUndefined() {
+  local currentEnvironmentName=${1};
+
+  if [ ! -z "${currentEnvironmentName}" ]; then
+    _error "Already running in '${currentEnvironmentName}' environment." \
+           "You can:" \
+           " - C-d to exit the current shell session" \
+           " - Pass the '-f' option to load the environment anyway"
+  fi
+}
+
+_error() {
+  local withUsage="false";
+
+  if [ "${1}" = "true" ]; then
+    withUsage="true";
+    shift;
+  elif [ "${1}" = "false" ]; then
+    withUsage="false";
+    shift;
+  fi
+
+  while [ ${#} -gt 0 ]; do
+    local message=${1};
+
+    shift;
+
+    >&2 echo "${message}";
+  done
+
+  if [ "${withUsage}" = "true" ]; then
+    >&2 echo "";
+    >&2 echo "$(_usage)";
+  fi
+
+  exit 1;
+}
+
+_errorWithUsage() {
+  _error "true" "${@}";
+}
+
+_loadEnvironmentVariables() {
+  local environmentName=${1};
+  local filePath=${2};
+
+  if [ -f ${filePath} ]; then
+    >&4 echo "Loading ${environmentName} environment variables...";
+    source ${filePath};
+
+    >&4 echo "Setting CURRENT_ENVIRONMENT_NAME to '${environmentName}'...";
+    export CURRENT_ENVIRONMENT_NAME="${environmentName}";
+  else
+    _errorWithUsage "Environment file '${filePath}' doesn't exist." \
+                    "You can customize the config path or project name if needed."
+  fi
+}
+
+_spawnNewShell() {
+  local shell=${1};
+
+  >&4 echo "Spawning new shell...";
+  exec ${shell} -i;
+}
+
+_usage() {
+cat <<EOF
+Usage: ${_scriptName} [-d|-f|-h|-v] <environment>
+
+Flags:
+  -d           Debug mode
+  -f           Force loading the new enviornment even if we
+               are already in one. Be careful, it might cause
+               unexpected behaviour
+  -h           Display this usage text
+  -v           Make it more verbose
+
+Environment Variables:
+  ENVIRONMENT_CONFIG_PATH:  Path where all the environment variable files are stored.
+                            Currently set to "${_configPath}"
+  ENVIRONMENT_PROJECT_NAME: Base name of the file looked up in the config folder Currently
+                            set to "${_projectName}"
+
+Arguments:
+  environment: (Default: dev) Environment name to load. The file
+               \`${_projectName}.<environment-name>\` will be loaded from
+               "${_configPath}"
+
+Example:
+  # Start a new shell with 'dev' environment variables loaded
+  ${_scriptName} dev
+EOF
+}
+
+_validateScriptCanRun() {
+  local force=${1};
+  local currentEnvironmentName=${2};
+
+  if [ ${force} = "false" ]; then
+    _ensureCurrentEnvironmentNameIsUndefined "${currentEnvironmentName}";
+  fi
+}
+
+if [ ${_shouldBeExecuted} = "true" ]; then
+  set -o errexit
+  set -o nounset
+  set -o pipefail
+
+  OPTIND=1;
+  while getopts "f?h?d?v?" option; do
+    case "${option}" in
+      "d")
+        exec 4>&1;
+        set -o xtrace;
+        ;;
+      "f")
+        _force="true";
+        ;;
+      "h")
+        echo "$(_usage)";
+        exit 0;
+        ;;
+      "v")
+        exec 4>&1;
+        ;;
+   esac
+  done
+
+  shift $((OPTIND-1));
+
+  _nextEnvironment=${1:-"dev"};
+  _nextEnvironmentFilePath=${_configPath}/${_projectName}.${_nextEnvironment};
+
+  _validateScriptCanRun ${_force} "${_currentEnvironmentName}";
+  _loadEnvironmentVariables ${_nextEnvironment} ${_nextEnvironmentFilePath};
+  _spawnNewShell ${_shell};
+fi

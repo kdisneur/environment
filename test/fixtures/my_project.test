@@ -1,0 +1,2 @@
+export NICE_VARIABLE_1="test";
+export VARIABLE_ONLY_IN_TEST="yup";
