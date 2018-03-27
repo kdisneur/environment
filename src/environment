@@ -1,0 +1,93 @@
+#! /usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+exec 4>/dev/null;
+
+_scriptName=$(basename $0);
+_scriptDir=$(dirname $0);
+_force="false";
+_nextEnvironment=${2:-"dev"};
+_currentEnvironmentName=${CURRENT_ENVIRONMENT_NAME:-};
+_nextEnvironmentFilePath=.env_vars.${_nextEnvironment};
+
+{
+set +o errexit;
+read -r -d '' _usage << EOF
+Usage: ${_scriptName} [-d|-f|-h|-v] <environment>
+
+Flags:
+  -d           Debug mode
+  -f           Force loading the new enviornment even if we
+               are already in one. Be careful, it might cause
+               unexpected behaviour
+  -h           Display this usage text
+  -v           Make it more verbose
+
+Arguments:
+  environment: (Default: dev) Environment name to laod. The file
+               \`env_vars.<environment-name>\` must be present in the
+               current folder
+
+Example:
+  # Start a new shell with 'dev' environment variables loaded
+  ${_scriptName} dev
+EOF
+set -o errexit;
+};
+
+_error() {
+  while [ ${#} -gt 0 ]; do
+    local message=${1};
+
+    shift
+
+    >&2 echo "${message}";
+  done
+
+  exit 1;
+}
+
+OPTIND=1;
+while getopts "f?h?d?v?" option; do
+  case "${option}" in
+    "d")
+      exec 4>&1;
+      set -o xtrace;
+      ;;
+    "f")
+      _force="true";
+      ;;
+    "h")
+      echo "${_usage}";
+      exit 0;
+      ;;
+    "v")
+      exec 4>&1;
+      ;;
+ esac
+done
+
+shift $((OPTIND-1));
+
+if [ ${_force} = "false" -a ! -z "${_currentEnvironmentName}" ]; then
+  _error "Already running in '${_currentEnvironmentName}' environment." \
+         "You can:" \
+         " - C-d to exit the current shell session" \
+         " - Pass the '-f' option to load the environment anyway"
+fi
+
+if [ ! -f ${_nextEnvironmentFilePath} ]; then
+  _error "'${_nextEnvironmentFilePath}' doesn't exist."
+fi
+
+>&4 echo "Loading ${_nextEnvironment} environment variables...";
+source ${_nextEnvironmentFilePath};
+
+>&4 echo "Setting CURRENT_ENVIRONMENT_NAME to '${_nextEnvironment}'...";
+export CURRENT_ENVIRONMENT_NAME="${_nextEnvironment}";
+
+>&4 echo "Spawning new shell...";
+exec $SHELL -i;
