@@ -8,7 +8,9 @@ _scriptDir=$(dirname $0);
 _shouldBeExecuted=$([ "${BASH_SOURCE[0]}" = "${0}" ] && echo "true" || echo "false");
 
 _shell=${SHELL};
+_command="execute";
 _configPath=${ENVIRONMENT_CONFIG_PATH:-${HOME}/.config/environment};
+_editor=${ENVIRONMENT_EDITOR:-${EDITOR:-vi}};
 _projectName=${ENVIRONMENT_PROJECT_NAME:-$(basename ${_rootPath})};
 _currentEnvironmentName=${CURRENT_ENVIRONMENT_NAME:-};
 
@@ -81,10 +83,11 @@ _spawnNewShell() {
 
 _usage() {
 cat <<EOF
-Usage: ${_scriptName} [-d|-f|-h|-v] <environment>
+Usage: ${_scriptName} [-d|-e|-f|-h|-v] <environment>
 
 Flags:
   -d           Debug mode
+  -e           Edit the environment configuration file
   -f           Force loading the new enviornment even if we
                are already in one. Be careful, it might cause
                unexpected behaviour
@@ -92,6 +95,9 @@ Flags:
   -v           Make it more verbose
 
 Environment Variables:
+  ENVIRONMENT_EDITOR:       Editor binary used to edit the environment configuration file.
+                            It fallbacks to EDITOR and then vi if not set.
+                            Currently set to "${_editor}"
   ENVIRONMENT_CONFIG_PATH:  Path where all the environment variable files are stored.
                             Currently set to "${_configPath}"
   ENVIRONMENT_PROJECT_NAME: Base name of the file looked up in the config folder Currently
@@ -123,11 +129,14 @@ if [ ${_shouldBeExecuted} = "true" ]; then
   set -o pipefail
 
   OPTIND=1;
-  while getopts "f?h?d?v?" option; do
+  while getopts "e?f?h?d?v?" option; do
     case "${option}" in
       "d")
         exec 4>&1;
         set -o xtrace;
+        ;;
+      "e")
+        _command="edit";
         ;;
       "f")
         _force="true";
@@ -147,7 +156,14 @@ if [ ${_shouldBeExecuted} = "true" ]; then
   _nextEnvironment=${1:-"dev"};
   _nextEnvironmentFilePath=${_configPath}/${_projectName}.${_nextEnvironment};
 
-  _validateScriptCanRun ${_force} "${_currentEnvironmentName}";
-  _loadEnvironmentVariables ${_nextEnvironment} ${_nextEnvironmentFilePath};
-  _spawnNewShell ${_shell};
+  case "${_command}" in
+    "edit")
+      ${_editor} ${_nextEnvironmentFilePath}
+      ;;
+    "execute")
+      _validateScriptCanRun ${_force} "${_currentEnvironmentName}";
+      _loadEnvironmentVariables ${_nextEnvironment} ${_nextEnvironmentFilePath};
+      _spawnNewShell ${_shell};
+      ;;
+  esac
 fi

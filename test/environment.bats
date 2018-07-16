@@ -193,3 +193,61 @@ setup() {
     && "${output}" =~ NICE_VARIABLE_1=test \
     && "${output}" =~ VARIABLE_ONLY_IN_TEST=yup ]]
 }
+
+@test "environment: -e when an environment doesn't exist" {
+  ENVIRONMENT_EDITOR="fakeEditor" \
+  ENVIRONMENT_CONFIG_PATH="${BATS_TEST_DIRNAME}/fixtures" \
+  ENVIRONMENT_PROJECT_NAME="my_project" \
+  SHELL=fakeShellPrintingEnvVars \
+  run environment -e "doestnotexistyet"
+
+  [ ${status} -eq 0 ]
+  [[ ${lines[0]} = "Editor opened with ${BATS_TEST_DIRNAME}/fixtures/my_project.doestnotexistyet" ]]
+}
+
+@test "environment: -e when environment exists" {
+  ENVIRONMENT_EDITOR="fakeEditor" \
+  ENVIRONMENT_CONFIG_PATH="${BATS_TEST_DIRNAME}/fixtures" \
+  ENVIRONMENT_PROJECT_NAME="my_project" \
+  SHELL=fakeShellPrintingEnvVars \
+  run environment -e "dev"
+
+  [ ${status} -eq 0 ]
+  [[ ${lines[0]} = "Editor opened with ${BATS_TEST_DIRNAME}/fixtures/my_project.dev" ]]
+}
+
+@test "environment: when ENVIRONMENT_EDITOR and EDITOR are set" {
+  ENVIRONMENT_EDITOR="fakeEditor --environment_editor" \
+  EDITOR="fakeEditor --editor" \
+  ENVIRONMENT_CONFIG_PATH="${BATS_TEST_DIRNAME}/fixtures" \
+  ENVIRONMENT_PROJECT_NAME="my_project" \
+  SHELL=fakeShellPrintingEnvVars \
+  run environment -e "dev"
+
+  [ ${status} -eq 0 ]
+  [[ ${lines[0]} = "Editor opened with --environment_editor ${BATS_TEST_DIRNAME}/fixtures/my_project.dev" ]]
+}
+
+@test "environment: when ENVIRONMENT_EDITOR is not set but EDITOR is" {
+  ENVIRONMENT_EDITOR= \
+  EDITOR="fakeEditor --editor" \
+  ENVIRONMENT_CONFIG_PATH="${BATS_TEST_DIRNAME}/fixtures" \
+  ENVIRONMENT_PROJECT_NAME="my_project" \
+  SHELL=fakeShellPrintingEnvVars \
+  run environment -e "dev"
+
+  [ ${status} -eq 0 ]
+  [[ ${lines[0]} = "Editor opened with --editor ${BATS_TEST_DIRNAME}/fixtures/my_project.dev" ]]
+}
+
+@test "environment: when ENVIRONMENT_EDITOR and EDITOR are not set" {
+  ENVIRONMENT_EDITOR= \
+  EDITOR= \
+  ENVIRONMENT_CONFIG_PATH="${BATS_TEST_DIRNAME}/fixtures" \
+  ENVIRONMENT_PROJECT_NAME="my_project" \
+  SHELL=fakeShellPrintingEnvVars \
+  run environment -e "dev"
+
+  [ ${status} -eq 0 ]
+  [[ ${lines[0]} = "Vi opened with ${BATS_TEST_DIRNAME}/fixtures/my_project.dev" ]]
+}
